@@ -17,14 +17,14 @@ Hints:
 	2. You may need to define two ways for localizing plates(yellow or other colors)
 """
 def plate_detection(image):
+	print(image.shape)
+	plate_imgs = []
     #Replace the below lines with your code.
 	hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 	colorMin = np.array([10,110,100])
 	colorMax = np.array([30,250,255])
-	mask = denoise(cv2.inRange(hsv, colorMin, colorMax), cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(6,6)))
+	mask = denoise(cv2.inRange(hsv, colorMin, colorMax), cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3)))
 	x, y, w, h = cv2.boundingRect(mask)
-	plate_imgs = []
-
 	output = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
 
 	# Get the number of connected components
@@ -40,11 +40,11 @@ def plate_detection(image):
 	for i in range(1, num_labels):
 		# Get the bounding box coordinates for the component
 		x, y, w, h = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP], stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
-		if w/h < 3.5:
+		if w/h < 3:
 			continue
 		# Draw a rectangle around the component
 		#cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-		buffer = 3
+		buffer = 2
 		x = max(0, x - buffer)
 		y = max(0, y - buffer)
 		w += 2 * buffer

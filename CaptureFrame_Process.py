@@ -3,6 +3,7 @@ import os
 import pandas as pd
 from Localization import plate_detection
 from Recognize import segment_and_recognize
+import numpy as np
 
 """
 In this file, you will define your own CaptureFrame_Process funtion. In this function,
@@ -43,7 +44,7 @@ def capture_frame(video_path, fps, save_dir):
 
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
 	
-	file_path = find_file_path("Video3_2.avi")
+	file_path = find_file_path("Video12_2.avi")
 	save_path = os.path.dirname(file_path)
 	sample_frequency = 1
 	
@@ -58,17 +59,20 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 	alphabet = createAlphabet(lettersPath, numbersPath)
 
 	for image_name in os.listdir(save_path):
+		if(image_name == "detected_plates"):
+			continue
 		image = os.path.join(save_path, image_name)
 		img = cv2.imread(image, 1)
-		print(image)
+		print(image_name)
 		plates = plate_detection(img)
 		savePlates(plates, plateFound, image_name)
 		plateStrings = segment_and_recognize(plates, alphabet)
 		if len(plateStrings) > 0:
 			for license in plateStrings:
-				if license is not None:
+				if license is not None and len(license)>5:
 					print(license)
 			cv2.waitKey(50)
+
 def find_file_path(file_name):
     for root, dirs, files in os.walk("."):
         if file_name in files:
@@ -83,15 +87,54 @@ def createAlphabet(letterDir, numberDir):
 		letterPath = os.path.join(letterDir,letterName)
 		img = cv2.imread(letterPath, 0)
 		img = img[:,:60]
+		#positiveRotImg = RotateImage(img, 5)
+		#positiveRotImg = cv2.resize(positiveRotImg, img.shape)
+		#negativeRotImg = RotateImage(img, 355)
+		#negativeRotImg = cv2.resize(negativeRotImg, img.shape)
+		#cv2.imshow("positiveRotImg", positiveRotImg)
+		#cv2.waitKey(2000)
+		#cv2.imshow("negativeRotImg",negativeRotImg)
+		#cv2.waitKey(2000)
 		#img = cv2.resize(img, (35,50))
 		char = letterPath.split("\\")[-1].split(".")[0]
 		alphabet[char] = img
+		#alphabet[char+"_PositiveRot"] = positiveRotImg
+		#alphabet[char+"_NegativeRot"] = negativeRotImg
 	for numberName in os.listdir(numberDir):
 		numberPath = os.path.join(numberDir,numberName)
 		img = cv2.imread(numberPath, 0)
 		img = img[:,:60]
+		#positiveRotImg = RotateImage(img, 5)
+		#positiveRotImg = cv2.resize(positiveRotImg, img.shape)
+		#negativeRotImg = RotateImage(img, 355)
+		#negativeRotImg = cv2.resize(negativeRotImg, img.shape)
+		#cv2.imshow("positiveRotImg", positiveRotImg)
+		#cv2.imshow("negativeRotImg",negativeRotImg)
 		#img = cv2.resize(img, (35,50))
 		char = numberPath.split("\\")[-1].split(".")[0]
 		alphabet[char] = img
+		#alphabet[char+"_PositiveRot"] = positiveRotImg
+		#alphabet[char+"_NegativeRot"] = negativeRotImg
 	return alphabet
+def RotateImage(Image, angle):
+    
+	imgHeight, imgWidth = Image.shape[0], Image.shape[1]
 
+	centreY, centreX = imgHeight//2, imgWidth//2
+
+	rotationMatrix = cv2.getRotationMatrix2D((centreY, centreX), angle, 1.0)
+	cosofRotationMatrix = np.abs(rotationMatrix[0][0])
+	sinofRotationMatrix = np.abs(rotationMatrix[0][1])
+
+	newImageHeight = int((imgHeight * sinofRotationMatrix) +
+						(imgWidth * cosofRotationMatrix))
+	newImageWidth = int((imgHeight * cosofRotationMatrix) +
+						(imgWidth * sinofRotationMatrix))
+
+	rotationMatrix[0][2] += (newImageWidth/2) - centreX
+	rotationMatrix[1][2] += (newImageHeight/2) - centreY
+
+	rotatingimage = cv2.warpAffine(
+		Image, rotationMatrix, (newImageWidth, newImageHeight))
+
+	return rotatingimage
