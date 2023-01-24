@@ -19,7 +19,6 @@ Hints:
 """
 def segment_and_recognize(plate_imgs, alphabet):
 	if len(plate_imgs)==0:
-		print("empty")
 		return np.empty(0)
 	
 	recognized_plates = np.empty(len(plate_imgs), dtype=object)
@@ -27,37 +26,41 @@ def segment_and_recognize(plate_imgs, alphabet):
 		string = ""
 		charaters = segmentation(plate)
 		for char in charaters:
+			#cv2.imshow("mask2", char)
+			#cv2.waitKey(2000)
 			c = recognition(char,alphabet)
 			string = string + c 
-		if(len(string)>5):
-			print(string)
+		if(len(string)==6):
 			recognized_plates[index] = string
 		else:
-			recognized_plates[index] = None
+			recognized_plates[index] = ""
 	return recognized_plates
 
 def segmentation(plate):
-	colorMin = np.array([10,110,100])
+	colorMin = np.array([10,125,115])
 	colorMax = np.array([30,250,255])
 	height, width = plate.shape[:2]
 	new_width = int(width * 0.96)
-	new_heigth = int(height * 0.95)
-	hsv = cv2.cvtColor(plate[:new_heigth, :new_width], cv2.COLOR_BGR2HSV)
-	mask = cv2.inRange(hsv, colorMin, colorMax)
+	hsv = cv2.cvtColor(plate[:height, :new_width], cv2.COLOR_BGR2HSV)
+	median = cv2.medianBlur(hsv, 3)
+	mask = cv2.inRange(median, colorMin, colorMax)
 	#cv2.imshow("mask2", mask)
 	#cv2.waitKey(2000)
-	gray = hsv[:,:,2]
-	equalized = cv2.equalizeHist(gray)
-	#cv2.imshow("mask", equalized)
-	#cv2.waitKey(2000)
-	_, binary = cv2.threshold(equalized, 128, 255, cv2.THRESH_BINARY)
-	#median = cv2.medianBlur(binary, 3)
-	#cv2.imshow("BINARIZED MEDIAN", binary)
-	#cv2.waitKey(2000)
+	wbRatio = whiteBlackRatio(mask)
+	if wbRatio <2.2 or wbRatio >3.5:
+		gray = hsv[:,:,2]
+		equalized = cv2.equalizeHist(gray)
+		#cv2.imshow("mask", equalized)
+		#cv2.waitKey(1000)
+		_, binary = cv2.threshold(equalized, 70, 255, cv2.THRESH_BINARY)
+		
+		#cv2.imshow("BINARIZED MEDIAN", binary)
+		#cv2.waitKey(1000)
+		mask = binary
 	#binary = denoise(binary, cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3)))
 	
 	#threshold, thresholded_image = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-	flood_fill_image = binary.copy()
+	flood_fill_image = mask.copy()
 	h, w = flood_fill_image.shape[:2]
 	mask2 = np.zeros((h+2, w+2), np.uint8)
 
@@ -128,3 +131,11 @@ def resize_and_concatenate(image, reference_image):
 	final_image = np.concatenate((resized_image, black_image), axis=1)
 	final_image = cv2.resize(final_image, (ref_width, ref_height))
 	return final_image
+def whiteBlackRatio(img):
+	white_pixels = cv2.countNonZero(img)
+	img_invert = cv2.bitwise_not(img)
+	black_pixels = cv2.countNonZero(img_invert)
+	if black_pixels == 0:
+		return 0
+	return white_pixels / black_pixels
+	

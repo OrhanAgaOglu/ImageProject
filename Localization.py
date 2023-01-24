@@ -17,14 +17,14 @@ Hints:
 	2. You may need to define two ways for localizing plates(yellow or other colors)
 """
 def plate_detection(image):
-	print(image.shape)
 	plate_imgs = []
     #Replace the below lines with your code.
 	hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 	colorMin = np.array([10,110,100])
 	colorMax = np.array([30,250,255])
 	mask = denoise(cv2.inRange(hsv, colorMin, colorMax), cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3)))
-	x, y, w, h = cv2.boundingRect(mask)
+	
+	#x, y, w, h = cv2.boundingRect(mask)
 	output = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
 
 	# Get the number of connected components
@@ -40,16 +40,24 @@ def plate_detection(image):
 	for i in range(1, num_labels):
 		# Get the bounding box coordinates for the component
 		x, y, w, h = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP], stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
-		if w/h < 3:
+		if w/h < 2:
 			continue
 		# Draw a rectangle around the component
-		#cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+
 		buffer = 2
 		x = max(0, x - buffer)
 		y = max(0, y - buffer)
 		w += 2 * buffer
 		h += 2 * buffer
-		plate_imgs.append(fixRotation(image[y:y+h, x:x+w]))
+		rotated_image = fixRotation(image[y:y+h, x:x+w])
+	
+		(h, w) = rotated_image.shape[:2]
+		hsv = cv2.cvtColor(rotated_image, cv2.COLOR_BGR2HSV)
+		bounding_rect = cv2.boundingRect(cv2.inRange(hsv, colorMin, colorMax))
+		# Crop the image using the bounding rectangle
+		cropped_image = rotated_image[bounding_rect[1]:bounding_rect[1]+bounding_rect[3], bounding_rect[0]:bounding_rect[0]+bounding_rect[2]]
+		plate_imgs.append(cropped_image)
+
 
 	#plate_imgs = crop(mask, image)
 	#plate_imgs = mask
@@ -67,7 +75,6 @@ def plate_detection(image):
 	return plate_imgs
 
 def checkRatio(image):
-	print(image.shape)
 	x, y, z = image.shape
 	if y< 100 or x < 33:
 		return False
@@ -82,25 +89,28 @@ def fixRotation(image):
 
 	# Perform edge detection
 	edges = cv2.Canny(gray, 50, 150, apertureSize=3)
-
 	# Run the Hough transform to detect lines in the image
-	lines = cv2.HoughLines(edges, 1, np.pi/180, 200)
-	if lines is not None and lines.shape[0] > 1:
-		# Convert the lines from polar coordinates to Cartesian coordinates
+	lines = cv2.HoughLines(edges, 1, np.pi/180, 50)
+	if lines is not None:	
+		rho = lines[:,0,0]
+		theta = lines[:,0,1]
+		a = np.cos(theta)
+		b = np.sin(theta)
+		x0 = a*rho
+		y0 = b*rho
+		x1 = x0 + 1000*(-b)
+		y1 = y0 + 1000*(a)
+		x2 = x0 - 1000*(-b)
+		y2 = y0 - 1000*(a)
+		
 		lines = np.squeeze(lines)
-		lines = np.stack((lines[:,1], lines[:,0]), axis=-1)
+		angles = np.arctan2(y2-y1,x2-x1)
 
-		# Calculate the angle of each line
-		angles = np.arctan2(lines[:,1], lines[:,0])
-
-		# Calculate the median angle of all the lines
-		median_angle = np.median(angles)
-
-		# Rotate the image to make the lines horizontal
+		median_angle = np.degrees(np.median(angles))
 		(h, w) = image.shape[:2]
 		center = (w // 2, h // 2)
-		M = cv2.getRotationMatrix2D(center, -median_angle, 1.0)
-		rotated_image = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+		M = cv2.getRotationMatrix2D(center, median_angle, 1.0)
+		rotated_image = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
 		return rotated_image
-	else:
-		return image
+	return image
+

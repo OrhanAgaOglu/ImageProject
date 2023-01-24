@@ -29,7 +29,6 @@ def capture_frame(video_path, fps, save_dir):
 
 	vidCap = cv2.VideoCapture(video_path)
 	vidCap.set(cv2.CAP_PROP_FPS, fps)
-	print(vidCap.get(cv2.CAP_PROP_FPS))
 	idx = 0 
 
 	while True:
@@ -44,7 +43,7 @@ def capture_frame(video_path, fps, save_dir):
 
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
 	
-	file_path = find_file_path("Video12_2.avi")
+	file_path = find_file_path("Video32_2.avi")
 	save_path = os.path.dirname(file_path)
 	sample_frequency = 1
 	
@@ -58,21 +57,17 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 	numbersPath = os.path.dirname(find_file_path("1.bmp"))
 	alphabet = createAlphabet(lettersPath, numbersPath)
 
+	guesses = []
 	for image_name in os.listdir(save_path):
 		if(image_name == "detected_plates"):
 			continue
 		image = os.path.join(save_path, image_name)
 		img = cv2.imread(image, 1)
-		print(image_name)
 		plates = plate_detection(img)
 		savePlates(plates, plateFound, image_name)
 		plateStrings = segment_and_recognize(plates, alphabet)
-		if len(plateStrings) > 0:
-			for license in plateStrings:
-				if license is not None and len(license)>5:
-					print(license)
-			cv2.waitKey(50)
-
+		guesses = np.concatenate((guesses,plateStrings),axis=0)
+	print(getBestString(guesses))
 def find_file_path(file_name):
     for root, dirs, files in os.walk("."):
         if file_name in files:
@@ -138,3 +133,21 @@ def RotateImage(Image, angle):
 		Image, rotationMatrix, (newImageWidth, newImageHeight))
 
 	return rotatingimage
+def getBestString(strings):
+	print(strings)
+	strings = [x for x in strings if x != '']
+	if len(strings) ==0:
+		return ""
+	num_chars = len(strings[0])
+
+	# create an empty numpy array to store the most frequent characters for each index
+	most_frequent_chars = np.empty(num_chars, dtype=str)
+
+	for i in range(num_chars):
+		chars_at_index = [string[i] for string in strings]
+		unique_chars, counts = np.unique(chars_at_index, return_counts=True)
+		max_count_index = np.argmax(counts)
+		most_frequent_chars[i] = unique_chars[max_count_index]
+
+	final_string = "".join(most_frequent_chars)
+	return final_string
