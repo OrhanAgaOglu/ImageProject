@@ -30,7 +30,7 @@ def segment_and_recognize(plate_imgs, alphabet):
 			#cv2.waitKey(2000)
 			c = recognition(char,alphabet)
 			string = string + c 
-		if(len(string)==6):
+		if(checkValidString(string)):
 			recognized_plates[index] = string
 		else:
 			recognized_plates[index] = ""
@@ -45,17 +45,18 @@ def segmentation(plate):
 	median = cv2.medianBlur(hsv, 3)
 	mask = cv2.inRange(median, colorMin, colorMax)
 	#cv2.imshow("mask2", mask)
-	#cv2.waitKey(2000)
+	#cv2.waitKey(300)
 	wbRatio = whiteBlackRatio(mask)
+	#print(wbRatio)
 	if wbRatio <2.2 or wbRatio >3.5:
 		gray = hsv[:,:,2]
 		equalized = cv2.equalizeHist(gray)
 		#cv2.imshow("mask", equalized)
-		#cv2.waitKey(1000)
-		_, binary = cv2.threshold(equalized, 70, 255, cv2.THRESH_BINARY)
+		#cv2.waitKey(300)
+		_, binary = cv2.threshold(equalized, 50, 255, cv2.THRESH_BINARY)
 		
 		#cv2.imshow("BINARIZED MEDIAN", binary)
-		#cv2.waitKey(1000)
+		#cv2.waitKey(300)
 		mask = binary
 	#binary = denoise(binary, cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3)))
 	
@@ -138,4 +139,10 @@ def whiteBlackRatio(img):
 	if black_pixels == 0:
 		return 0
 	return white_pixels / black_pixels
-	
+def checkValidString(string):
+	letter_count = sum(c.isalpha() for c in string)
+	number_count = sum(c.isnumeric() for c in string)
+	if letter_count > 4 or number_count > 4 or len(string)!=6:
+		return False
+	else:
+		return True

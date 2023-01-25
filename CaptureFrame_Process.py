@@ -33,17 +33,17 @@ def capture_frame(video_path, fps, save_dir):
 
 	while True:
 		ret, frame = vidCap.read()
-
 		if ret == False:
 			vidCap.release()
 			break
-		
-		cv2.imwrite(f"{save_dir}/{idx}_{vidCap.get(cv2.CAP_PROP_POS_MSEC)}.png" , frame)
+		timestamp = vidCap.get(cv2.CAP_PROP_POS_MSEC)
+		time = timestamp / 1000
+		cv2.imwrite(f"{save_dir}/{time:.2f}.png" , frame)
 		idx += 1
 
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
 	
-	file_path = find_file_path("Video32_2.avi")
+	file_path = find_file_path("Video31_2.avi")
 	save_path = os.path.dirname(file_path)
 	sample_frequency = 1
 	
@@ -58,7 +58,7 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 	alphabet = createAlphabet(lettersPath, numbersPath)
 
 	guesses = []
-	for image_name in os.listdir(save_path):
+	for frame_no,image_name in enumerate(os.listdir(save_path)):
 		if(image_name == "detected_plates"):
 			continue
 		image = os.path.join(save_path, image_name)
@@ -66,16 +66,26 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 		plates = plate_detection(img)
 		savePlates(plates, plateFound, image_name)
 		plateStrings = segment_and_recognize(plates, alphabet)
-		guesses = np.concatenate((guesses,plateStrings),axis=0)
-	print(getBestString(guesses))
+		for plate in plateStrings:
+			if plate != "":
+				timestamp = image_name.replace(".png", "")
+				guesses.append([plate, frame_no, timestamp])
+	mostLikely = getBestString(guesses)
+	array = []
+	result = get_closest_match(mostLikely, guesses)
+	array.append(result)
+	save_as_csv(array, "output.csv")
+
 def find_file_path(file_name):
     for root, dirs, files in os.walk("."):
         if file_name in files:
             return os.path.join(root, file_name)
     return None
+
 def savePlates(plates, plateFound, image_name):
 	for plate in plates:
 		cv2.imwrite(plateFound + "\\" + f"{image_name}" + ".png" , plate)
+
 def createAlphabet(letterDir, numberDir):
 	alphabet = {}
 	for letterName in os.listdir(letterDir):
@@ -111,6 +121,7 @@ def createAlphabet(letterDir, numberDir):
 		#alphabet[char+"_PositiveRot"] = positiveRotImg
 		#alphabet[char+"_NegativeRot"] = negativeRotImg
 	return alphabet
+
 def RotateImage(Image, angle):
     
 	imgHeight, imgWidth = Image.shape[0], Image.shape[1]
@@ -133,21 +144,78 @@ def RotateImage(Image, angle):
 		Image, rotationMatrix, (newImageWidth, newImageHeight))
 
 	return rotatingimage
+
+# Method to return the most likely string based on
+# the frequency of the characters in each index
 def getBestString(strings):
-	print(strings)
-	strings = [x for x in strings if x != '']
-	if len(strings) ==0:
-		return ""
-	num_chars = len(strings[0])
+    strings = [x[0] for x in strings if x != '']
+    # rest of the code remains the same
+    num_chars = len(strings[0])
+    most_frequent_chars = np.empty(num_chars, dtype=str)
 
-	# create an empty numpy array to store the most frequent characters for each index
-	most_frequent_chars = np.empty(num_chars, dtype=str)
+    for i in range(num_chars):
+        chars_at_index = [string[i] for string in strings]
+        unique_chars, counts = np.unique(chars_at_index, return_counts=True)
+        max_count_index = np.argmax(counts)
+        most_frequent_chars[i] = unique_chars[max_count_index]
 
-	for i in range(num_chars):
-		chars_at_index = [string[i] for string in strings]
-		unique_chars, counts = np.unique(chars_at_index, return_counts=True)
-		max_count_index = np.argmax(counts)
-		most_frequent_chars[i] = unique_chars[max_count_index]
+    final_string = "".join(most_frequent_chars)
+    return final_string
 
-	final_string = "".join(most_frequent_chars)
-	return final_string
+
+# Saver method to construct the output
+def save_as_csv(data, filename):
+	with open(filename, "w") as f:
+		f.write("License plate"+ ","+ "Frame no."+","+"Timestamp(seconds)" + "\n")
+		for line in data:
+			result = f"{line[0]},{line[1]},{float(line[2]):.4f}"
+			f.write(result +"\n")
+
+# Method to transform string of plate into approporiate format
+def format_license_plate(plate):
+	formatted_plate = ""
+	countLetter = 0
+	countNumber = 0
+	for i in range(len(plate)):
+		if (i > 0 and (plate[i].isalpha() != plate[i-1].isalpha())):
+			formatted_plate += "-"
+		formatted_plate += plate[i]
+	for j in range(len(formatted_plate)):
+		if formatted_plate[j] == "-":
+			continue
+		if formatted_plate[j].isalpha():
+			countLetter += 1
+			countNumber = 0
+		else: 
+			countNumber += 1
+			countLetter = 0
+		if(countLetter ==4 or countNumber ==4):
+			formatted_plate = formatted_plate [:j-1] + '-' + formatted_plate [j-1:]
+			countLetter = 0
+			countNumber = 0
+	return formatted_plate
+
+def get_closest_match(input_string, strings):
+	distances = [levenshtein(input_string, string) for string in strings]
+	min_distance = min(distances)
+	min_distance_index = distances.index(min_distance)
+	closest_string = strings[min_distance_index][0]
+	result=[]
+	for string in strings:
+		if string[0] == closest_string:
+			result= string
+	result[0] = format_license_plate(result[0])
+	return result
+
+def levenshtein(s1, s2):
+    if len(s1) == 0:
+        return len(s2)
+    if len(s2) == 0:
+        return len(s1)
+    if s1[-1] == s2[-1]:
+        cost = 0
+    else:
+        cost = 1
+    return min(levenshtein(s1[:-1], s2) + 1,
+               levenshtein(s1, s2[:-1]) + 1,
+               levenshtein(s1[:-1], s2[:-1]) + cost)
