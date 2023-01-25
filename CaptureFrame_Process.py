@@ -4,6 +4,8 @@ import pandas as pd
 from Localization import plate_detection
 from Recognize import segment_and_recognize
 import numpy as np
+from scipy.spatial import distance
+
 
 """
 In this file, you will define your own CaptureFrame_Process funtion. In this function,
@@ -64,6 +66,16 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 		image = os.path.join(save_path, image_name)
 		img = cv2.imread(image, 1)
 		plates = plate_detection(img)
+		plates_groups = np.empty((2,len(plates)))
+		group_index = 1
+		for plate_index, plate in enumerate(plates):
+			if plates_groups.size > 0:
+				threshold = 100
+				distance = hammingDistance(plate,plates[plate_index - 1])
+				if distance > threshold:
+					group_index += 1
+			plates_groups[plate_index] = [group_index, plate]
+		#print(plates_groups)
 		savePlates(plates, plateFound, image_name)
 		plateStrings = segment_and_recognize(plates, alphabet)
 		for plate in plateStrings:
@@ -219,3 +231,17 @@ def levenshtein(s1, s2):
     return min(levenshtein(s1[:-1], s2) + 1,
                levenshtein(s1, s2[:-1]) + 1,
                levenshtein(s1[:-1], s2[:-1]) + cost)
+
+def hammingDistance(img1, img2):
+	bgr1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+	bgr2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+	threshold1 = cv2.threshold(bgr1, 128, 255, cv2.THRESH_BINARY)
+	threshold2 = cv2.threshold(bgr2, 128, 255, cv2.THRESH_BINARY)
+	threshold1 = np.array(threshold1)
+	threshold2 = np.array(threshold2)
+	flat_1 = threshold1.flatten()
+	flat_2 = threshold2.flatten()
+	#diff = cv2.bitwise_xor(threshold1, threshold2)
+	#hamming_distance = cv2.countNonZero(diff)
+	ham_dist = distance.hamming(flat_1, flat_2)
+	return ham_dist
